@@ -2,14 +2,23 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from "@google/genai";
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// __dirname equivalent for ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 app.use(cors());
 app.use(express.json());
+
+// Serve Vite-built static assets from /dist for production
+app.use(express.static(path.join(__dirname, 'dist')));
 
 // Initialize Gemini with the correct SDK
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY });
@@ -102,11 +111,19 @@ Respond in Thai.
       config: config
     });
 
-    res.json({ reply: response.text });
+    // SDKs may return different shapes; prefer .text but fallback to other fields
+    const replyText = response?.text || response?.output?.[0]?.content || JSON.stringify(response);
+
+    res.json({ reply: replyText });
   } catch (err) {
     console.error("Gemini error:", err);
     res.status(500).json({ error: "Gemini error" });
   }
+});
+
+// For SPA client-side routing, return index.html for unknown routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
